@@ -1,23 +1,28 @@
 #!/usr/bin/env python
-
+import sys
+import cv2 as cv
+import mediapipe as mp
 import rospy
+
+from loguru import logger
+
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Point
-import cv2 as cv
-import mediapipe as mp
-import numpy as np
-import sys
+
+
 
 mpHand = mp.solutions.hands
 mpDraw = mp.solutions.drawing_utils
-hands = mpHand.Hands(min_detection_confidence=0.8)
+hands = mpHand.Hands(min_detection_confidence=0.9)
 
 class HandTrackerNode:
     def __init__(self, video_source):
-        rospy.init_node('hand_tracker_node', anonymous=True)
-        self.image_pub = rospy.Publisher("hand_tracker_image", Image, queue_size=10)
-        self.point_pub = rospy.Publisher("hand_position", Point, queue_size=10)
+        rospy.init_node('hand_tracker_node')
+        logger.remove(0)
+        logger.add(sys.stderr, format = "<red>[{level}]</red> <green>{message}</green> ", colorize=True)
+        self.image_pub = rospy.Publisher("perception/hand_tracker_image", Image, queue_size=10)
+        self.point_pub = rospy.Publisher("perception/hand_position", Point, queue_size=10)
         self.bridge = CvBridge()
         self.video_source = video_source
 
@@ -47,8 +52,8 @@ class HandTrackerNode:
             if multi_hand_detection:
                 for id, lm in enumerate(multi_hand_detection):
                     mpDraw.draw_landmarks(img_rgb, lm, mpHand.HAND_CONNECTIONS,
-                                          mpDraw.DrawingSpec(color=(0, 255, 255), thickness=4, circle_radius=7),
-                                          mpDraw.DrawingSpec(color=(0, 0, 0), thickness=4))
+                                          mpDraw.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=3),
+                                          mpDraw.DrawingSpec(color=(0, 0, 0), thickness=2))
                 
                 single_hand_detection = multi_hand_detection[0]
                 for lm in single_hand_detection.landmark:
@@ -58,11 +63,14 @@ class HandTrackerNode:
                 
                 if lmList:
                     px, py = lmList[8]
-                    cv.circle(img_rgb, (px, py), 15, (255, 0, 255), cv.FILLED)
-                    cv.putText(img_rgb, str((px, py)), (px + 10, py - 10), cv.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), 3)
+                    cv.circle(img_rgb, (px, py), 7, (255, 0, 0), cv.FILLED)
+                    text = f"Coordinate: ({px}, {py})"
+                    cv.putText(img_rgb, text, (10, 20), cv.FONT_HERSHEY_PLAIN, 1, (25, 25, 25), 2, cv.LINE_AA)
+                    cv.putText(img_rgb, text, (10, 20), cv.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1, cv.LINE_AA)
+                    cv.line(img_rgb, (0, py), (ws, py), (0, 0, 0), 2)  
+                    cv.line(img_rgb, (px, hs), (px, 0), (0, 0, 0), 2)  
 
-
-                    print(f'Hand Position x: {px} y: {py}')
+                    logger.info(f'Hand Position x: {px} y: {py}')
                     # Publish hand position as Point message
                     hand_point_msg = Point()
                     hand_point_msg.x = px
@@ -70,7 +78,6 @@ class HandTrackerNode:
                     hand_point_msg.z = 0
                     self.point_pub.publish(hand_point_msg)
 
-            # Publish image as sensor_msgs/Image
             try:
                 self.image_pub.publish(self.bridge.cv2_to_imgmsg(img_rgb, "bgr8"))
             except CvBridgeError as e:
