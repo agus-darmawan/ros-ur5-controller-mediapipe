@@ -27,6 +27,12 @@
 *.a
 *.lib
 
+# Video files
+*.avi
+*.flv
+*.f4v
+*.mp4
+
 # Executables
 *.exe
 *.out
