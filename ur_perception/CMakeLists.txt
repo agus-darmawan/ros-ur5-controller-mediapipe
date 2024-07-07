@@ -8,6 +8,7 @@ project(ur_perception)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  ur_interface
   geometry_msgs
   rospy
   sensor_msgs

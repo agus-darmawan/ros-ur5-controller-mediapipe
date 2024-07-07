@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import sys
 import cv2 as cv
 import mediapipe as mp
@@ -8,21 +7,22 @@ from loguru import logger
 
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-from geometry_msgs.msg import Point
-
-
+from std_msgs.msg import Int32
 
 mpHand = mp.solutions.hands
 mpDraw = mp.solutions.drawing_utils
 hands = mpHand.Hands(min_detection_confidence=0.9)
 
+GRID_ROWS = 4
+GRID_COLS = 2
+
 class HandTrackerNode:
     def __init__(self, video_source):
         rospy.init_node('hand_tracker_node')
         logger.remove(0)
-        logger.add(sys.stderr, format = "<red>[{level}]</red> <green>{message}</green> ", colorize=True)
+        logger.add(sys.stderr, format="<red>[{level}]</red> <green>{message}</green> ", colorize=True)
         self.image_pub = rospy.Publisher("perception/hand_tracker_image", Image, queue_size=10)
-        self.point_pub = rospy.Publisher("perception/hand_position", Point, queue_size=10)
+        self.petak_pub = rospy.Publisher("perception/hand_petak", Int32, queue_size=10)
         self.bridge = CvBridge()
         self.video_source = video_source
 
@@ -32,9 +32,12 @@ class HandTrackerNode:
             rospy.logerr(f"Error opening video source {self.video_source}")
             return
         
-        ws, hs = 1280, 720
+        ws, hs = 848, 480
         cap.set(3, ws)
         cap.set(4, hs)
+
+        section_width = ws // GRID_COLS
+        section_height = hs // GRID_ROWS
 
         while not rospy.is_shutdown() and cap.isOpened():
             success, img = cap.read()
@@ -46,6 +49,22 @@ class HandTrackerNode:
             results = hands.process(img_rgb)
             img_rgb = cv.cvtColor(img_rgb, cv.COLOR_RGB2BGR)
 
+            # Draw grid lines and add text to each petak
+            for i in range(1, GRID_COLS):
+                x = i * section_width
+                cv.line(img_rgb, (x, 0), (x, hs), (0, 0, 255), 2)
+            
+            for i in range(1, GRID_ROWS):
+                y = i * section_height
+                cv.line(img_rgb, (0, y), (ws, y), (0, 0, 255), 2)
+            
+            for row in range(GRID_ROWS):
+                for col in range(GRID_COLS):
+                    center_x, center_y = self.calculate_center(col, row, section_width, section_height)
+                    petak = row * GRID_COLS + col
+                    text = f"Petak: {petak}"
+                    cv.putText(img_rgb, text, (center_x - 30, center_y + 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv.LINE_AA)
+
             multi_hand_detection = results.multi_hand_landmarks
             lmList = []
 
@@ -56,27 +75,20 @@ class HandTrackerNode:
                                           mpDraw.DrawingSpec(color=(0, 0, 0), thickness=2))
                 
                 single_hand_detection = multi_hand_detection[0]
-                for lm in single_hand_detection.landmark:
+                if single_hand_detection:
+                    lm = single_hand_detection.landmark[8]
                     h, w, c = img_rgb.shape
                     lm_x, lm_y = int(lm.x * w), int(lm.y * h)
-                    lmList.append([lm_x, lm_y])
-                
-                if lmList:
-                    px, py = lmList[8]
-                    cv.circle(img_rgb, (px, py), 7, (255, 0, 0), cv.FILLED)
-                    text = f"Coordinate: ({px}, {py})"
+                    petak = self.calculate_petak(lm_x, lm_y, section_width, section_height)
+                    
+                    cv.circle(img_rgb, (lm_x, lm_y), 7, (255, 0, 0), cv.FILLED)
+                    text = f"Petak: {petak}"
                     cv.putText(img_rgb, text, (10, 20), cv.FONT_HERSHEY_PLAIN, 1, (25, 25, 25), 2, cv.LINE_AA)
                     cv.putText(img_rgb, text, (10, 20), cv.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1, cv.LINE_AA)
-                    cv.line(img_rgb, (0, py), (ws, py), (0, 0, 0), 2)  
-                    cv.line(img_rgb, (px, hs), (px, 0), (0, 0, 0), 2)  
-
-                    logger.info(f'Hand Position x: {px} y: {py}')
-                    # Publish hand position as Point message
-                    hand_point_msg = Point()
-                    hand_point_msg.x = px
-                    hand_point_msg.y = py
-                    hand_point_msg.z = 0
-                    self.point_pub.publish(hand_point_msg)
+                    
+                    logger.info(f'Hand is in petak: {petak}')
+                    # Publish petak as Int32 message
+                    self.petak_pub.publish(petak)
 
             try:
                 self.image_pub.publish(self.bridge.cv2_to_imgmsg(img_rgb, "bgr8"))
@@ -90,6 +102,17 @@ class HandTrackerNode:
         
         cap.release()
         cv.destroyAllWindows()
+
+    def calculate_petak(self, px, py, section_width, section_height):
+        col_index = px // section_width
+        row_index = py // section_height
+        petak = row_index * GRID_COLS + col_index
+        return petak
+    
+    def calculate_center(self, col, row, section_width, section_height):
+        center_x = col * section_width + section_width // 2
+        center_y = row * section_height + section_height // 2
+        return center_x, center_y
 
 if __name__ == '__main__':
     try:
