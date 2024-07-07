@@ -1,38 +1,41 @@
-# UR5 Controller ROS2 Humble Mediapie
+<div align="center">
+  <h1>UR5 Controller ROS2 Humble Mediapie</h1>
+  <img src="docs/detection.png" alt="Banner Image">
+</div>
+
+---
+
+This repository contains a ROS (Robot Operating System) node written in Python that integrates MediaPipe for perception tasks and controls relays based on detected hand gestures. The node subscribes to a specific ROS topic, processes hand tracking data using MediaPipe, and sends HTTP POST requests to a specified API endpoint to control relay states accordingly.
 
 ## Table of Contents
 
-- [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
 - [Package Description](#package-description)
 - [Installation](#installation)
 - [Usage](#usage)
-
-## Introduction
-
-This repository contains code for controlling a UR5 Robot using Mediapie like picture below.
-
-<p align="center">
-    <img src="docs/detection.png" alt="Software Architecture" />
-</p>
-
-The software architecture consists of three main nodes (Perception Node, Controller Node, UR Interface) and an RViz GUI for visualization and interaction.
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Prerequisites
 
-Before you begin, ensure you have met the following requirements:
-
-- Ubuntu 20.04
-- ROS1 Noetic
-- 1 Network connection with a ESP of the robot
+- ROS1 (tested with [ROS1 distribution])
+- Python 3.6+
+- MediaPipe
+- `rospy`, `requests`, `loguru` Python packages
 
 ## Package Description
 
-The package is structured as follows:
+### Overview
 
-- **Perception Node**: Handles camera data and processes using mediapie for the controller node.
-- **Controller Node**: Manages the logic for controlling the UR5 robot based on input from the perception.
-- **UR Interface**: Service interface for the controller node.
+The node subscribes to the `perception/hand_petak` topic to receive `Int32` messages indicating which relay to control. It uses MediaPipe for hand tracking and gesture recognition, and controls relay states by sending HTTP POST requests to a configurable API endpoint.
+
+### Features
+
+- **ROS Integration**: Subscribes to `perception/hand_petak` topic.
+- **MediaPipe Integration**: Uses MediaPipe for hand tracking and gesture recognition.
+- **Relay Control**: Sends HTTP POST requests to control relay states.
+- **Logging**: Utilizes the `loguru` library for logging.
+- **Configurable API Endpoint**: API endpoint for relay control is configurable via command-line argument.
 
 ## Installation
 
