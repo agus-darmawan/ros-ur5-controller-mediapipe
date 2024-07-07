@@ -1,128 +1,48 @@
 #!/usr/bin/env python3
-
 import sys
-import cv2 as cv
-import mediapipe as mp
 import rospy
-
+import requests
+from std_msgs.msg import Int32
 from loguru import logger
 
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge, CvBridgeError
-from std_msgs.msg import Int32
-
-mpHand = mp.solutions.hands
-mpDraw = mp.solutions.drawing_utils
-hands = mpHand.Hands(min_detection_confidence=0.9)
-
-GRID_ROWS = 4
-GRID_COLS = 2
-
-class HandTrackerNode:
-    def __init__(self, video_source):
-        rospy.init_node('hand_tracker_node')
+class URControllerNode:
+    def __init__(self, api_endpoint):
+        rospy.init_node('ur_controller_node')
         logger.remove(0)
         logger.add(sys.stderr, format="<red>[{level}]</red> <green>{message}</green> ", colorize=True)
-        self.image_pub = rospy.Publisher("perception/hand_tracker_image", Image, queue_size=10)
-        self.petak_pub = rospy.Publisher("perception/hand_petak", Int32, queue_size=10)
-        self.bridge = CvBridge()
-        self.video_source = video_source
+        self.petak_sub = rospy.Subscriber("perception/hand_petak", Int32, self.petak_callback)
+        self.api_endpoint = api_endpoint
+        self.current_petak = None
 
-    def capture_and_publish(self):
-        cap = cv.VideoCapture(self.video_source)
-        if not cap.isOpened():
-            rospy.logerr(f"Error opening video source {self.video_source}")
-            return
-        
-        ws, hs = 848, 480
-        cap.set(3, ws)
-        cap.set(4, hs)
+    def petak_callback(self, msg):
+        petak = msg.data
+        if self.current_petak != petak:
+            if self.current_petak is not None:
+                self.set_relay_state(self.current_petak, 0)  # Send state 0 to the last petak id
 
-        section_width = ws // GRID_COLS
-        section_height = hs // GRID_ROWS
+            self.current_petak = petak
+            self.set_relay_state(petak, 1)
 
-        while not rospy.is_shutdown() and cap.isOpened():
-            success, img = cap.read()
-            if not success:
-                break
-            
-            img = cv.flip(img, 1)
-            img_rgb = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-            results = hands.process(img_rgb)
-            img_rgb = cv.cvtColor(img_rgb, cv.COLOR_RGB2BGR)
+    def set_relay_state(self, petak, state):
+        url = f"{self.api_endpoint}/relay/{petak}"
+        data = {'state': state}
+        try:
+            response = requests.post(url, data=data)
+            response.raise_for_status()
+            logger.info(f"Successfully set relay {petak} to state {state}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error setting relay state: {e}")
 
-            # Draw grid lines and add text to each petak
-            for i in range(1, GRID_COLS):
-                x = i * section_width
-                cv.line(img_rgb, (x, 0), (x, hs), (0, 0, 255), 2)
-            
-            for i in range(1, GRID_ROWS):
-                y = i * section_height
-                cv.line(img_rgb, (0, y), (ws, y), (0, 0, 255), 2)
-            
-            for row in range(GRID_ROWS):
-                for col in range(GRID_COLS):
-                    center_x, center_y = self.calculate_center(col, row, section_width, section_height)
-                    petak = row * GRID_COLS + col
-                    text = f"Petak: {petak}"
-                    cv.putText(img_rgb, text, (center_x - 30, center_y + 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv.LINE_AA)
-
-            multi_hand_detection = results.multi_hand_landmarks
-            lmList = []
-
-            if multi_hand_detection:
-                for id, lm in enumerate(multi_hand_detection):
-                    mpDraw.draw_landmarks(img_rgb, lm, mpHand.HAND_CONNECTIONS,
-                                          mpDraw.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=3),
-                                          mpDraw.DrawingSpec(color=(0, 0, 0), thickness=2))
-                
-                single_hand_detection = multi_hand_detection[0]
-                if single_hand_detection:
-                    lm = single_hand_detection.landmark[8]
-                    h, w, c = img_rgb.shape
-                    lm_x, lm_y = int(lm.x * w), int(lm.y * h)
-                    petak = self.calculate_petak(lm_x, lm_y, section_width, section_height)
-                    
-                    cv.circle(img_rgb, (lm_x, lm_y), 7, (255, 0, 0), cv.FILLED)
-                    text = f"Petak: {petak}"
-                    cv.putText(img_rgb, text, (10, 20), cv.FONT_HERSHEY_PLAIN, 1, (25, 25, 25), 2, cv.LINE_AA)
-                    cv.putText(img_rgb, text, (10, 20), cv.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1, cv.LINE_AA)
-                    
-                    logger.info(f'Hand is in petak: {petak}')
-                    # Publish petak as Int32 message
-                    self.petak_pub.publish(petak)
-
-            try:
-                self.image_pub.publish(self.bridge.cv2_to_imgmsg(img_rgb, "bgr8"))
-            except CvBridgeError as e:
-                print(e)
-
-            cv.imshow("Image", img_rgb)
-            key = cv.waitKey(1)
-            if key == ord('q'):
-                break
-        
-        cap.release()
-        cv.destroyAllWindows()
-
-    def calculate_petak(self, px, py, section_width, section_height):
-        col_index = px // section_width
-        row_index = py // section_height
-        petak = row_index * GRID_COLS + col_index
-        return petak
-    
-    def calculate_center(self, col, row, section_width, section_height):
-        center_x = col * section_width + section_width // 2
-        center_y = row * section_height + section_height // 2
-        return center_x, center_y
+    def run(self):
+        rospy.spin()
 
 if __name__ == '__main__':
     try:
         if len(sys.argv) == 2:
-            video_source = sys.argv[1]
-            node = HandTrackerNode(video_source)
-            node.capture_and_publish()
+            api_endpoint = sys.argv[1]
+            node = URControllerNode(api_endpoint)
+            node.run()
         else:
-            print("Usage: rosrun your_package_name your_script_name.py <video_file_path or camera_index>")
+            print("Usage: rosrun your_package_name your_script_name.py <api_endpoint>")
     except rospy.ROSInterruptException:
         pass

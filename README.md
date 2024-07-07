@@ -72,4 +72,4 @@ To run the system, follow these steps:
    ```bash
    rosrun ur_controller ur_controller_node.py 'API'
    ```
-   note : API is API of the send comand
+   note : API url post comand of esp inside the UR
