@@ -26,11 +26,11 @@ class URControllerNode:
     def modeCallback(self,req : ModeServiceRequest) -> ModeServiceResponse:
         mode = Int32()
         ret = ModeServiceResponse()
-        if req.mode == '1:
+        if req.mode == '1':
             self.mode == 1
             mode.data = 1
             ret.succes = True
-        elif req.mode == '2:
+        elif req.mode == '2':
             self.mode == 2
             mode.data = 0
             ret.succes = True
@@ -38,7 +38,7 @@ class URControllerNode:
             self.mode == 0
             mode.data = 0
             ret.succes = False
-            
+
         self.cammera_pub.publish(mode)
         return ret
  
