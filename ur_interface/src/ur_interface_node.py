@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import sys
 import rospy
 import actionlib
@@ -14,7 +13,7 @@ class URInterfaceNode:
         rospy.init_node('ur_interface_node')
         logger.remove(0)
         logger.add(sys.stderr, format="<red>[{level}]</red> <green>{message}</green>", colorize=True)
-        
+        self.cammera_pub = rospy.Publisher("controller/mode/cam", Int32, queue_size=10)
         self.petak_sub = rospy.Subscriber("controller/command", Int32, self.command_callback)
         self.put_location_pub = rospy.Publisher("put_location", Int32, queue_size=10)
         self.trajectory_client = actionlib.SimpleActionClient(
@@ -60,8 +59,6 @@ class URInterfaceNode:
             self.execute_command_2()
         elif command == 3:
             self.execute_command_3()
-        elif command == 4:
-            self.execute_command_4()
         else:
             logger.warning(f"Unknown command received: {command}")
 
@@ -76,7 +73,6 @@ class URInterfaceNode:
         
         self.open_gripper()
         
-        self.send_put_location(0)
         
         idle_positions = [38.50, -88.87, 90.25, -89.22, -87.04, -11.36]
         self.move_to_joint_positions(self.degrees_to_radians(idle_positions))
@@ -92,29 +88,11 @@ class URInterfaceNode:
         
         self.open_gripper()
         
-        self.send_put_location(0)
         
         idle_positions = [38.50, -88.87, 90.25, -89.22, -87.04, -11.36]
         self.move_to_joint_positions(self.degrees_to_radians(idle_positions))
 
     def execute_command_3(self):
-        positions_list = [
-            [7.92, -90.36, 90.43, -90.51, -88.37, -31.97],
-            [7.89, -86.83, 106.39, -111.66, -89.41, -31.99],
-            [9.50, -80.34, 116.48, -125.18, -92.80, -31.99]
-        ]
-        
-        for positions in positions_list:
-            self.move_to_joint_positions(self.degrees_to_radians(positions))
-        
-        self.close_gripper()
-        
-        next_positions = [78.58, -84.25, 83.42, -93.19, -87.07, -10.64]
-        self.move_to_joint_positions(self.degrees_to_radians(next_positions))
-        
-        self.send_put_location(1)
-
-    def execute_command_4(self):
         positions_list = [
             [39.24, -61.52, 73.86, -97.26, -87.08, -10.64],
             [39.25, -58.28, 83.66, -110.15, -87.07, -10.64]
@@ -122,13 +100,16 @@ class URInterfaceNode:
         
         for positions in positions_list:
             self.move_to_joint_positions(self.degrees_to_radians(positions))
+
         
         self.close_gripper()
-        
+       
         next_positions = [78.58, -84.25, 83.42, -93.19, -87.07, -10.64]
         self.move_to_joint_positions(self.degrees_to_radians(next_positions))
         
-        self.send_put_location(1)
+        mode = Int32()
+        mode.data = 2
+        self.cammera_pub.publish(mode)
 
     def open_gripper(self):
         # Implement the functionality to open the gripper

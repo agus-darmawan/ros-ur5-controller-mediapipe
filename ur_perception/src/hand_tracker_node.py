@@ -23,13 +23,14 @@ class HandTrackerNode:
         logger.add(sys.stderr, format="<red>[{level}]</red> <green>{message}</green> ", colorize=True)
         self.image_pub = rospy.Publisher("perception/hand_tracker_image", Image, queue_size=10)
         self.petak_pub = rospy.Publisher("perception/hand/position", Int32, queue_size=10)
+
         self.bridge = CvBridge()
         self.video_source = video_source
         self.mode = 0  # Default mode
         self.grid_rows = 4
         self.grid_cols = 2
 
-        rospy.Subscriber("controller/mode", Int32, self.mode_callback)
+        rospy.Subscriber("controller/mode/cam", Int32, self.mode_callback)
 
     def mode_callback(self, data):
         self.mode = data.data
