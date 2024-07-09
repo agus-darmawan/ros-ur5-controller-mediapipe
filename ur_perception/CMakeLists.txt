@@ -37,6 +37,7 @@ catkin_python_setup()
 catkin_package()
 
 catkin_install_python(PROGRAMS
+  src/distance_serial_node.py
   src/hand_tracker_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
